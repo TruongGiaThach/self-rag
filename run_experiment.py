@@ -192,29 +192,22 @@ def setup_environment(workspace_dir: Path, hf_token: str, skip: bool):
     print(f"🔨 Upgrade pip, setuptools, wheel...")
     run(f"{venv_bin}/pip install --quiet --upgrade pip setuptools wheel", cwd=workspace_dir)
 
-    # 3. PyTorch (CUDA 11.8)
-    print(f"🔨 Cài PyTorch + CUDA 11.8...")
-    run(
-        f"{venv_bin}/pip install --quiet "
-        "torch torchvision torchaudio "
-        "--index-url https://download.pytorch.org/whl/cu118",
-        cwd=workspace_dir
-    )
+    # 3. Cài vLLM trước (sẽ tự cài PyTorch phù hợp)
+    print(f"🔨 Cài vLLM (INT8 bitsandbytes support)...")
+    print(f"    Note: vLLM sẽ tự động cài PyTorch version tương thích")
+    # Dùng version mới hơn để tránh conflict với torch
+    run(f"{venv_bin}/pip install --quiet 'vllm>=0.4.0,<0.6.0'", cwd=workspace_dir)
 
-    # 4. vLLM >= 0.3.0 (INT8 quantization support)
-    print(f"🔨 Cài vLLM >= 0.3.0 (INT8 bitsandbytes)...")
-    run(f"{venv_bin}/pip install --quiet 'vllm>=0.3.0,<0.4.0'", cwd=workspace_dir)
-
-    # 5. Transformers, bitsandbytes, accelerate
+    # 4. Transformers, bitsandbytes, accelerate
     print(f"🔨 Cài transformers, bitsandbytes, accelerate...")
     run(
         f"{venv_bin}/pip install --quiet "
-        "transformers==4.36.2 "
-        "bitsandbytes>=0.41.1 "
-        "accelerate==0.25.0 "
+        "'transformers>=4.36.0' "
+        "'bitsandbytes>=0.41.0' "
+        "'accelerate>=0.25.0' "
         "sentencepiece "
-        "datasets==2.15.0 "
-        "jsonlines tqdm numpy scipy spacy backoff openai==0.28.1",
+        "'datasets>=2.15.0' "
+        "jsonlines tqdm numpy scipy spacy backoff 'openai<1.0'",
         cwd=workspace_dir
     )
 
