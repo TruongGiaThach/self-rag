@@ -207,18 +207,27 @@ def setup_environment(workspace_dir: Path, hf_token: str, skip: bool):
     print(f"🔨 Upgrade pip, setuptools, wheel...")
     run(f"{venv_bin}/pip install --quiet --upgrade pip setuptools wheel", cwd=workspace_dir)
 
-    # 3. Cài vLLM trước (sẽ tự cài PyTorch phù hợp)
-    print(f"🔨 Cài vLLM...")
-    print(f"    Note: vLLM sẽ tự động cài PyTorch version tương thích")
+    # 3. Cài PyTorch TRƯỚC (vLLM cần torch để build)
+    print(f"🔨 Cài PyTorch + CUDA 11.8...")
+    print(f"    Note: Đây là dependency cho vLLM")
+    run(
+        f"{venv_bin}/pip install --quiet "
+        "torch torchvision torchaudio "
+        "--index-url https://download.pytorch.org/whl/cu118",
+        cwd=workspace_dir
+    )
+
+    # 4. Cài vLLM 0.4.2 (stable, không cần pyairports)
+    print(f"🔨 Cài vLLM 0.4.2...")
     # Use vLLM 0.4.2 - stable version without guided decoding dependencies
     # vLLM 0.5+ requires outlines/pyairports which has dependency issues
     run(f"{venv_bin}/pip install --quiet 'vllm==0.4.2'", cwd=workspace_dir)
 
-    # 3.5. Fix missing dependencies (only needed for vLLM <= 0.4.x)
+    # 4.5. Fix missing dependencies (only needed for vLLM <= 0.4.x)
     print(f"🔨 Cài dependencies cho vLLM...")
     run(f"{venv_bin}/pip install 'ray>=2.5.1' 'xformers>=0.0.23'", cwd=workspace_dir, check=False)
 
-    # 4. Transformers, bitsandbytes, accelerate
+    # 5. Transformers, bitsandbytes, accelerate
     print(f"🔨 Cài transformers, bitsandbytes, accelerate...")
     run(
         f"{venv_bin}/pip install --quiet "
