@@ -2,3 +2,7 @@
 # HuggingFace tokens
 hf_*
 .hf_token
+_download_popqa.py
+data/
+venv_selfrag/
+outputs
