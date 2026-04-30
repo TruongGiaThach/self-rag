@@ -36,10 +36,14 @@ from pathlib import Path
 # Helpers
 # ══════════════════════════════════════════════════════════════════════════════
 
-def run(cmd, cwd=None, check=True):
+def run(cmd, cwd=None, check=True, env=None):
     """Chạy shell command với realtime output."""
     print(f"\n💻 [CMD] {cmd}")
-    result = subprocess.run(cmd, shell=True, cwd=cwd, stdout=None, stderr=None)
+    import os
+    run_env = os.environ.copy()
+    if env:
+        run_env.update(env)
+    result = subprocess.run(cmd, shell=True, cwd=cwd, stdout=None, stderr=None, env=run_env)
     if check and result.returncode != 0:
         print(f"❌ [ERROR] Command failed with code {result.returncode}")
         sys.exit(result.returncode)
@@ -207,7 +211,7 @@ def setup_environment(workspace_dir: Path, hf_token: str, skip: bool):
         "'accelerate>=0.25.0' "
         "sentencepiece "
         "'datasets>=2.15.0' "
-        "jsonlines tqdm numpy scipy spacy backoff 'openai<1.0'",
+        "jsonlines tqdm numpy scipy spacy backoff 'openai>=1.0'",
         cwd=workspace_dir
     )
 
@@ -215,10 +219,13 @@ def setup_environment(workspace_dir: Path, hf_token: str, skip: bool):
     print(f"🔨 Tải spacy model...")
     run(f"{venv_bin}/python -m spacy download en_core_web_sm", cwd=workspace_dir, check=False)
 
-    # 7. HuggingFace login
+    # 7. HuggingFace token (set environment variable instead of CLI login)
     if hf_token:
-        print(f"🔨 Login HuggingFace...")
-        run(f"{venv_bin}/huggingface-cli login --token {hf_token}", cwd=workspace_dir, check=False)
+        print(f"🔨 Setup HuggingFace token...")
+        token_file = workspace_dir / ".hf_token"
+        token_file.write_text(hf_token)
+        print(f"  ✓ Token saved to {token_file}")
+        print(f"  ✓ Export: HF_TOKEN will be set when running experiments")
 
     print("\n✅ Setup hoàn tất!")
     return venv_bin
@@ -268,19 +275,28 @@ def check_server(workspace_dir: Path):
     else:
         print(f"  ⚠ NVIDIA Driver không phát hiện")
 
-    # GPU VRAM
+    # GPU VRAM (check all GPUs, find max)
     vram_info = run_capture("nvidia-smi --query-gpu=name,memory.total --format=csv,noheader")
     if vram_info:
         print(f"  ✓ GPU: {vram_info}")
-        if "MiB" in vram_info:
-            vram_mb = int(vram_info.split(",")[1].strip().split()[0])
-            vram_gb = vram_mb / 1024
-            if vram_gb < 8:
-                print(f"  ⚠ VRAM {vram_gb:.1f}GB < 8GB — có thể không đủ!")
-            elif vram_gb >= 12:
-                print(f"  ✓ VRAM {vram_gb:.1f}GB >= 12GB — đủ thoải mái cho INT8!")
+        # Parse all GPUs and find max VRAM
+        max_vram_gb = 0
+        for line in vram_info.strip().split('\n'):
+            if "MiB" in line:
+                try:
+                    vram_mb = int(line.split(",")[1].strip().split()[0])
+                    max_vram_gb = max(max_vram_gb, vram_mb / 1024)
+                except:
+                    pass
+        if max_vram_gb > 0:
+            if max_vram_gb < 8:
+                print(f"  ⚠ Max VRAM {max_vram_gb:.1f}GB < 8GB — có thể không đủ!")
+            elif max_vram_gb >= 12:
+                print(f"  ✅ Max VRAM {max_vram_gb:.1f}GB >= 12GB — đủ thoải mái cho INT8!")
             else:
-                print(f"  ✓ VRAM {vram_gb:.1f}GB — vừa đủ cho INT8 7B model")
+                print(f"  ✓ Max VRAM {max_vram_gb:.1f}GB — vừa đủ cho INT8 7B model")
+        else:
+            print(f"  ⚠ Không parse được VRAM")
     else:
         print(f"  ⚠ Không đọc được VRAM info")
 
@@ -319,6 +335,11 @@ def run_scenario_a(workspace_dir: Path, venv_bin: Path, data_path: Path, args) -
     print("🚀 SCENARIO A: Llama-2-7B No Retrieval")
     print("=" * 70)
 
+    env = {}
+    token_file = workspace_dir / ".hf_token"
+    if token_file.exists():
+        env["HF_TOKEN"] = token_file.read_text().strip()
+
     run(
         f"{venv_bin}/python retrieval_lm/run_baseline_lm.py "
         f"--model_name {args.llama_model} "
@@ -332,6 +353,7 @@ def run_scenario_a(workspace_dir: Path, venv_bin: Path, data_path: Path, args) -
         f"--task popqa "
         f"--download_dir {workspace_dir}/model_cache",
         cwd=workspace_dir,
+        env=env,
     )
     return out
 
@@ -348,6 +370,11 @@ def run_scenario_b(workspace_dir: Path, venv_bin: Path, data_path: Path, args) -
     print(f"🚀 SCENARIO B: Standard RAG (Always K={args.ndocs})")
     print("=" * 70)
 
+    env = {}
+    token_file = workspace_dir / ".hf_token"
+    if token_file.exists():
+        env["HF_TOKEN"] = token_file.read_text().strip()
+
     run(
         f"{venv_bin}/python retrieval_lm/run_baseline_lm.py "
         f"--model_name {args.llama_model} "
@@ -362,6 +389,7 @@ def run_scenario_b(workspace_dir: Path, venv_bin: Path, data_path: Path, args) -
         f"--task popqa "
         f"--download_dir {workspace_dir}/model_cache",
         cwd=workspace_dir,
+        env=env,
     )
     return out
 
@@ -377,6 +405,11 @@ def run_scenario_c(workspace_dir: Path, venv_bin: Path, data_path: Path, args) -
     print("\n" + "=" * 70)
     print(f"🚀 SCENARIO C: SELF-RAG Adaptive (δ={args.threshold}, Beam={args.beam_width})")
     print("=" * 70)
+
+    env = {}
+    token_file = workspace_dir / ".hf_token"
+    if token_file.exists():
+        env["HF_TOKEN"] = token_file.read_text().strip()
 
     run(
         f"{venv_bin}/python retrieval_lm/run_short_form.py "
@@ -398,6 +431,7 @@ def run_scenario_c(workspace_dir: Path, venv_bin: Path, data_path: Path, args) -
         f"--beam_width {args.beam_width} "
         f"--download_dir {workspace_dir}/model_cache",
         cwd=workspace_dir,
+        env=env,
     )
     return out
 
