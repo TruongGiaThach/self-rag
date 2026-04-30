@@ -275,28 +275,28 @@ def check_server(workspace_dir: Path):
     else:
         print(f"  ⚠ NVIDIA Driver không phát hiện")
 
-    # GPU VRAM (check all GPUs, find max)
-    vram_info = run_capture("nvidia-smi --query-gpu=name,memory.total --format=csv,noheader")
+    # GPU VRAM (check all GPUs, find max FREE memory)
+    vram_info = run_capture("nvidia-smi --query-gpu=name,memory.free --format=csv,noheader")
     if vram_info:
-        print(f"  ✓ GPU: {vram_info}")
-        # Parse all GPUs and find max VRAM
-        max_vram_gb = 0
+        print(f"  ✓ GPU: {vram_info.replace('MiB', 'MiB free')}")
+        # Parse all GPUs and find max FREE VRAM
+        max_free_gb = 0
         for line in vram_info.strip().split('\n'):
             if "MiB" in line:
                 try:
                     vram_mb = int(line.split(",")[1].strip().split()[0])
-                    max_vram_gb = max(max_vram_gb, vram_mb / 1024)
+                    max_free_gb = max(max_free_gb, vram_mb / 1024)
                 except:
                     pass
-        if max_vram_gb > 0:
-            if max_vram_gb < 8:
-                print(f"  ⚠ Max VRAM {max_vram_gb:.1f}GB < 8GB — có thể không đủ!")
-            elif max_vram_gb >= 12:
-                print(f"  ✅ Max VRAM {max_vram_gb:.1f}GB >= 12GB — đủ thoải mái cho INT8!")
+        if max_free_gb > 0:
+            if max_free_gb < 7:
+                print(f"  ⚠ Max FREE VRAM {max_free_gb:.1f}GB < 7GB — có thể không đủ cho INT8!")
+            elif max_free_gb >= 10:
+                print(f"  ✅ Max FREE VRAM {max_free_gb:.1f}GB >= 10GB — đủ thoải mái!")
             else:
-                print(f"  ✓ Max VRAM {max_vram_gb:.1f}GB — vừa đủ cho INT8 7B model")
+                print(f"  ✓ Max FREE VRAM {max_free_gb:.1f}GB — vừa đủ cho INT8 7B model")
         else:
-            print(f"  ⚠ Không parse được VRAM")
+            print(f"  ⚠ Không parse được VRAM free")
     else:
         print(f"  ⚠ Không đọc được VRAM info")
 
