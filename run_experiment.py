@@ -50,11 +50,16 @@ def run(cmd, cwd=None, check=True, env=None):
     return result.returncode
 
 
-def run_capture(cmd, cwd=None):
+def run_capture(cmd, cwd=None, env=None):
     """Chạy command và capture stdout."""
+    import os
+    run_env = os.environ.copy()
+    if env:
+        run_env.update(env)
     result = subprocess.run(
         cmd, shell=True, cwd=cwd,
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        env=run_env
     )
     return result.stdout.strip()
 
@@ -210,7 +215,9 @@ def setup_environment(workspace_dir: Path, hf_token: str, skip: bool):
 
     # 3.5. Fix missing vLLM dependencies (outlines requires these)
     print(f"🔨 Cài missing dependencies cho vLLM outlines...")
-    run(f"{venv_bin}/pip install pyairports pycountry", cwd=workspace_dir)
+    # pyairports v0.0.1 on PyPI is broken - install from GitHub
+    run(f"{venv_bin}/pip uninstall -y pyairports", cwd=workspace_dir, check=False)
+    run(f"{venv_bin}/pip install git+https://github.com/mborsetti/pyairports.git pycountry", cwd=workspace_dir)
     
     # Verify installation
     print(f"🔍 Verify pyairports installation...")
@@ -220,9 +227,9 @@ def setup_environment(workspace_dir: Path, hf_token: str, skip: bool):
     if "OK" in verify_result:
         print(f"  ✓ pyairports installed successfully")
     else:
-        print(f"  ⚠️ pyairports verification failed!")
-        print(f"  Trying alternative installation...")
-        run(f"{venv_bin}/pip install --upgrade --force-reinstall pyairports", cwd=workspace_dir)
+        print(f"  ❌ ERROR: pyairports still not working!")
+        print(f"     This is required for vLLM. Please report this issue.")
+        sys.exit(1)
 
     # 4. Transformers, bitsandbytes, accelerate
     print(f"🔨 Cài transformers, bitsandbytes, accelerate...")
@@ -251,7 +258,11 @@ def setup_environment(workspace_dir: Path, hf_token: str, skip: bool):
 
     # 8. Final verification
     print(f"\n🔍 Verify venv setup...")
-    vllm_check = run_capture(f"{venv_bin}/python -c \"import vllm; print(vllm.__version__)\"")
+    cuda_env = {"CUDA_DEVICE_ORDER": "PCI_BUS_ID"}
+    vllm_check = run_capture(
+        f"{venv_bin}/python -c \"import vllm; print(vllm.__version__)\"",
+        env=cuda_env
+    )
     if vllm_check:
         print(f"  ✓ vLLM version: {vllm_check}")
     else:
