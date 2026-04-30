@@ -208,28 +208,15 @@ def setup_environment(workspace_dir: Path, hf_token: str, skip: bool):
     run(f"{venv_bin}/pip install --quiet --upgrade pip setuptools wheel", cwd=workspace_dir)
 
     # 3. Cài vLLM trước (sẽ tự cài PyTorch phù hợp)
-    print(f"🔨 Cài vLLM (INT8 bitsandbytes support)...")
+    print(f"🔨 Cài vLLM...")
     print(f"    Note: vLLM sẽ tự động cài PyTorch version tương thích")
-    # Dùng version mới hơn để tránh conflict với torch
-    run(f"{venv_bin}/pip install --quiet 'vllm>=0.4.0,<0.6.0'", cwd=workspace_dir)
+    # Use vLLM 0.4.2 - stable version without guided decoding dependencies
+    # vLLM 0.5+ requires outlines/pyairports which has dependency issues
+    run(f"{venv_bin}/pip install --quiet 'vllm==0.4.2'", cwd=workspace_dir)
 
-    # 3.5. Fix missing vLLM dependencies (outlines requires these)
-    print(f"🔨 Cài missing dependencies cho vLLM outlines...")
-    # pyairports v0.0.1 on PyPI is broken - install from GitHub
-    run(f"{venv_bin}/pip uninstall -y pyairports", cwd=workspace_dir, check=False)
-    run(f"{venv_bin}/pip install git+https://github.com/mborsetti/pyairports.git pycountry", cwd=workspace_dir)
-    
-    # Verify installation
-    print(f"🔍 Verify pyairports installation...")
-    verify_result = run_capture(
-        f"{venv_bin}/python -c \"from pyairports.airports import AIRPORT_LIST; print('OK')\""
-    )
-    if "OK" in verify_result:
-        print(f"  ✓ pyairports installed successfully")
-    else:
-        print(f"  ❌ ERROR: pyairports still not working!")
-        print(f"     This is required for vLLM. Please report this issue.")
-        sys.exit(1)
+    # 3.5. Fix missing dependencies (only needed for vLLM <= 0.4.x)
+    print(f"🔨 Cài dependencies cho vLLM...")
+    run(f"{venv_bin}/pip install 'ray>=2.5.1' 'xformers>=0.0.23'", cwd=workspace_dir, check=False)
 
     # 4. Transformers, bitsandbytes, accelerate
     print(f"🔨 Cài transformers, bitsandbytes, accelerate...")
@@ -265,14 +252,10 @@ def setup_environment(workspace_dir: Path, hf_token: str, skip: bool):
     )
     if vllm_check:
         print(f"  ✓ vLLM version: {vllm_check}")
+        if not vllm_check.startswith("0.4"):
+            print(f"  ⚠️  Warning: Expected vLLM 0.4.x for stability")
     else:
         print(f"  ⚠️ Cannot import vllm!")
-    
-    pyairports_check = run_capture(f"{venv_bin}/python -c \"import pyairports; print('OK')\"")
-    if "OK" in pyairports_check:
-        print(f"  ✓ pyairports: OK")
-    else:
-        print(f"  ⚠️ pyairports: MISSING")
 
     print("\n✅ Setup hoàn tất!")
     return venv_bin
@@ -623,7 +606,7 @@ def main():
     print(f"  beam width      : {args.beam_width}")
     print(f"  Weights         : w_rel={args.w_rel}, w_sup={args.w_sup}, w_use={args.w_use}")
     print(f"  max_new_tokens  : {args.max_new_tokens}")
-    print(f"  Quantization    : INT8 (vLLM) — ~7GB VRAM")
+    print(f"  vLLM version    : 0.4.2 (stable, FP16/INT8 support)")
     print(f"  Skip setup      : {args.skip_setup}")
     print(f"  Skip scenarios  : {skip_set or 'none'}")
     print(f"  Check only      : {args.check_only}")
