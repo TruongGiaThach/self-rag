@@ -202,9 +202,9 @@ def setup_environment(workspace_dir: Path, hf_token: str, skip: bool):
     # Dùng version mới hơn để tránh conflict với torch
     run(f"{venv_bin}/pip install --quiet 'vllm>=0.4.0,<0.6.0'", cwd=workspace_dir)
 
-    # 3.5. Fix missing vLLM dependencies
-    print(f"🔨 Cài missing dependencies cho vLLM (outlines)...")
-    run(f"{venv_bin}/pip install --quiet pyairports", cwd=workspace_dir)
+    # 3.5. Fix missing vLLM dependencies (outlines requires these)
+    print(f"🔨 Cài missing dependencies cho vLLM outlines...")
+    run(f"{venv_bin}/pip install pyairports pycountry", cwd=workspace_dir)
 
     # 4. Transformers, bitsandbytes, accelerate
     print(f"🔨 Cài transformers, bitsandbytes, accelerate...")
