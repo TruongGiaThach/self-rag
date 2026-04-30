@@ -191,6 +191,12 @@ def setup_environment(workspace_dir: Path, hf_token: str, skip: bool):
         run(f"python3 -m venv {venv_dir}", cwd=workspace_dir)
     else:
         print(f"✓ Venv đã tồn tại")
+    
+    # Show venv info
+    print(f"\n📍 Virtual environment:")
+    print(f"  Path: {venv_dir}")
+    print(f"  Python: {venv_bin}/python")
+    print(f"  Pip: {venv_bin}/pip")
 
     # 2. Upgrade pip
     print(f"🔨 Upgrade pip, setuptools, wheel...")
@@ -205,6 +211,18 @@ def setup_environment(workspace_dir: Path, hf_token: str, skip: bool):
     # 3.5. Fix missing vLLM dependencies (outlines requires these)
     print(f"🔨 Cài missing dependencies cho vLLM outlines...")
     run(f"{venv_bin}/pip install pyairports pycountry", cwd=workspace_dir)
+    
+    # Verify installation
+    print(f"🔍 Verify pyairports installation...")
+    verify_result = run_capture(
+        f"{venv_bin}/python -c \"from pyairports.airports import AIRPORT_LIST; print('OK')\""
+    )
+    if "OK" in verify_result:
+        print(f"  ✓ pyairports installed successfully")
+    else:
+        print(f"  ⚠️ pyairports verification failed!")
+        print(f"  Trying alternative installation...")
+        run(f"{venv_bin}/pip install --upgrade --force-reinstall pyairports", cwd=workspace_dir)
 
     # 4. Transformers, bitsandbytes, accelerate
     print(f"🔨 Cài transformers, bitsandbytes, accelerate...")
@@ -230,6 +248,20 @@ def setup_environment(workspace_dir: Path, hf_token: str, skip: bool):
         token_file.write_text(hf_token)
         print(f"  ✓ Token saved to {token_file}")
         print(f"  ✓ Export: HF_TOKEN will be set when running experiments")
+
+    # 8. Final verification
+    print(f"\n🔍 Verify venv setup...")
+    vllm_check = run_capture(f"{venv_bin}/python -c \"import vllm; print(vllm.__version__)\"")
+    if vllm_check:
+        print(f"  ✓ vLLM version: {vllm_check}")
+    else:
+        print(f"  ⚠️ Cannot import vllm!")
+    
+    pyairports_check = run_capture(f"{venv_bin}/python -c \"import pyairports; print('OK')\"")
+    if "OK" in pyairports_check:
+        print(f"  ✓ pyairports: OK")
+    else:
+        print(f"  ⚠️ pyairports: MISSING")
 
     print("\n✅ Setup hoàn tất!")
     return venv_bin
@@ -339,7 +371,7 @@ def run_scenario_a(workspace_dir: Path, venv_bin: Path, data_path: Path, args) -
     print("🚀 SCENARIO A: Llama-2-7B No Retrieval")
     print("=" * 70)
 
-    env = {}
+    env = {"CUDA_DEVICE_ORDER": "PCI_BUS_ID"}
     token_file = workspace_dir / ".hf_token"
     if token_file.exists():
         env["HF_TOKEN"] = token_file.read_text().strip()
@@ -374,7 +406,7 @@ def run_scenario_b(workspace_dir: Path, venv_bin: Path, data_path: Path, args) -
     print(f"🚀 SCENARIO B: Standard RAG (Always K={args.ndocs})")
     print("=" * 70)
 
-    env = {}
+    env = {"CUDA_DEVICE_ORDER": "PCI_BUS_ID"}
     token_file = workspace_dir / ".hf_token"
     if token_file.exists():
         env["HF_TOKEN"] = token_file.read_text().strip()
@@ -410,7 +442,7 @@ def run_scenario_c(workspace_dir: Path, venv_bin: Path, data_path: Path, args) -
     print(f"🚀 SCENARIO C: SELF-RAG Adaptive (δ={args.threshold}, Beam={args.beam_width})")
     print("=" * 70)
 
-    env = {}
+    env = {"CUDA_DEVICE_ORDER": "PCI_BUS_ID"}
     token_file = workspace_dir / ".hf_token"
     if token_file.exists():
         env["HF_TOKEN"] = token_file.read_text().strip()
