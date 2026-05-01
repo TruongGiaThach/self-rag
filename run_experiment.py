@@ -217,15 +217,20 @@ def setup_environment(workspace_dir: Path, hf_token: str, skip: bool):
         cwd=workspace_dir
     )
 
+    # 3.5. Cài xformers TRƯỚC vLLM (tránh build isolation issue)
+    print(f"🔨 Cài xformers (pre-built wheel)...")
+    run(f"{venv_bin}/pip install --quiet 'xformers>=0.0.23'", cwd=workspace_dir)
+
     # 4. Cài vLLM 0.4.2 (stable, không cần pyairports)
     print(f"🔨 Cài vLLM 0.4.2...")
     # Use vLLM 0.4.2 - stable version without guided decoding dependencies
     # vLLM 0.5+ requires outlines/pyairports which has dependency issues
-    run(f"{venv_bin}/pip install --quiet 'vllm==0.4.2'", cwd=workspace_dir)
+    # Use --no-build-isolation vì torch đã có trong venv
+    run(f"{venv_bin}/pip install --no-build-isolation 'vllm==0.4.2'", cwd=workspace_dir)
 
     # 4.5. Fix missing dependencies (only needed for vLLM <= 0.4.x)
     print(f"🔨 Cài dependencies cho vLLM...")
-    run(f"{venv_bin}/pip install 'ray>=2.5.1' 'xformers>=0.0.23'", cwd=workspace_dir, check=False)
+    run(f"{venv_bin}/pip install 'ray>=2.5.1'", cwd=workspace_dir, check=False)
 
     # 5. Transformers, bitsandbytes, accelerate
     print(f"🔨 Cài transformers, bitsandbytes, accelerate...")
